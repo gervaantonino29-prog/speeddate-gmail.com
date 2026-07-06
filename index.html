@@ -176,6 +176,7 @@
       <div class="org-round-buttons">
         <button id="startEventBtn" style="flex:1;">Avvia il turno 1</button>
       </div>
+      <p id="orgDebug" style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:8px;"></p>
       <div class="org-round-buttons hidden" id="orgAdjustButtons" style="margin-top:8px;">
         <button id="prevRoundBtn" style="flex:1;">Turno precedente</button>
         <button id="nextRoundBtn" style="flex:1;">Turno successivo</button>
@@ -201,7 +202,7 @@ async function ghFetchFile(){
   try{
     const res = await fetch(WORKER_URL);
     if(!res.ok){
-      console.error('Worker read error', res.status, await res.text());
+      lastWriteError = 'Lettura fallita: HTTP ' + res.status;
       return { data: JSON.parse(JSON.stringify(DEFAULT_DATA)), sha: null };
     }
     const json = await res.json();
@@ -210,19 +211,31 @@ async function ghFetchFile(){
     }
     return { data: JSON.parse(json.data), sha: json.sha };
   }catch(e){
-    console.error('Worker fetch error', e);
+    lastWriteError = 'Errore di rete in lettura: ' + e.message;
     return { data: JSON.parse(JSON.stringify(DEFAULT_DATA)), sha: null };
   }
 }
 
+let lastWriteError = null;
+
 async function ghPutFile(data, sha){
-  const res = await fetch(WORKER_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content: JSON.stringify(data), sha })
-  });
-  const json = await res.json();
-  return { ok: json.status === 200 || json.status === 201, status: json.status };
+  try{
+    const res = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: JSON.stringify(data), sha })
+    });
+    if(!res.ok){
+      lastWriteError = 'HTTP ' + res.status;
+      return { ok: false, status: res.status };
+    }
+    const json = await res.json();
+    lastWriteError = json.status === 200 || json.status === 201 ? null : ('GitHub status ' + json.status);
+    return { ok: json.status === 200 || json.status === 201, status: json.status };
+  }catch(e){
+    lastWriteError = 'Errore di rete: ' + e.message;
+    return { ok: false, status: 0 };
+  }
 }
 
 let me = null;
@@ -549,6 +562,8 @@ document.getElementById('setDurationBtn').addEventListener('click', async ()=>{
 document.getElementById('startEventBtn').addEventListener('click', async ()=>{
   cachedConfig.start = Date.now();
   await setConfig(cachedConfig);
+  const check = await getConfig();
+  document.getElementById('orgDebug').textContent = 'Scritto: start=' + cachedConfig.start + ' | Riletto: start=' + (check.start || 'null') + ' | Errore: ' + (lastWriteError || 'nessuno');
   renderOrgTick();
 });
 
