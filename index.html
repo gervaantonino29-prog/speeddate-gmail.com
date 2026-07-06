@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speed date</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+<style>
+  :root {
+    --bg: #f4f3ee;
+    --card: #ffffff;
+    --border: #dedcd2;
+    --border-strong: #b4b2a9;
+    --border-accent: #378add;
+    --text: #2c2c2a;
+    --text-secondary: #5f5e5a;
+    --text-muted: #888780;
+    --accent-bg: #e6f1fb;
+    --accent-text: #0c447c;
+    --danger-bg: #fcebeb;
+    --danger-text: #791f1f;
+    --danger-border: #e24b4a;
+    --success-bg: #eaf3de;
+    --success-text: #27500a;
+    --success-border: #639922;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+  .app { width: 100%; max-width: 420px; }
+  h1 { font-size: 20px; font-weight: 500; margin: 0 0 4px; }
+  .subtitle { font-size: 14px; color: var(--text-secondary); margin: 0 0 24px; }
+  label { font-size: 14px; color: var(--text-secondary); display: block; margin-bottom: 6px; }
+  input, select {
+    width: 100%;
+    height: 40px;
+    border-radius: 8px;
+    border: 0.5px solid var(--border-strong);
+    background: var(--card);
+    padding: 0 12px;
+    font-size: 15px;
+    margin-bottom: 14px;
+    color: var(--text);
+  }
+  button {
+    border-radius: 8px;
+    border: 0.5px solid var(--border-strong);
+    background: var(--card);
+    padding: 10px 16px;
+    font-size: 15px;
+    cursor: pointer;
+    color: var(--text);
+  }
+  button:active { transform: scale(0.98); }
+  .primary { width: 100%; background: var(--text); color: #fff; border: none; padding: 12px; font-size: 15px; }
+  .gender-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  .gender-btn { flex: 1; }
+  .gender-btn.active { border-color: var(--border-accent); border-width: 2px; }
+  .row-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .small-btn { font-size: 13px; padding: 6px 12px; }
+  .question-card {
+    background: var(--accent-bg);
+    color: var(--accent-text);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .question-hint { font-size: 12px; margin-bottom: 6px; opacity: 0.8; }
+  .question-text { font-size: 16px; }
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .match-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px;
+    background: var(--danger-bg);
+    border-radius: 8px;
+  }
+  .match-row i { font-size: 18px; color: var(--danger-text); }
+  .match-row span { font-size: 15px; color: var(--danger-text); }
+  .empty { padding: 16px; color: var(--text-muted); font-size: 14px; text-align: center; }
+  .hidden { display: none; }
+
+  .partner-card {
+    background: var(--card);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .partner-round { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
+  .partner-name { font-size: 22px; font-weight: 500; margin-bottom: 16px; }
+  .timer { font-size: 32px; font-weight: 500; margin-bottom: 20px; font-variant-numeric: tabular-nums; }
+  .timer.warning { color: var(--danger-text); }
+  .vote-row { display: flex; gap: 10px; }
+  .vote-btn { flex: 1; padding: 14px; font-size: 15px; }
+  .vote-btn.yes.active { background: var(--success-bg); color: var(--success-text); border-color: var(--success-border); }
+  .vote-btn.no.active { background: var(--danger-bg); color: var(--danger-text); border-color: var(--danger-border); }
+
+  .org-round-card {
+    background: var(--card);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .org-round-number { font-size: 24px; font-weight: 500; margin-bottom: 4px; }
+  .org-timer { font-size: 36px; font-weight: 500; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .org-round-label { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+  .org-round-buttons { display: flex; gap: 8px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Speed date</h1>
+  <p class="subtitle">Turni cronometrati, cambio automatico</p>
+
+  <div id="setup">
+    <label for="myName">Il tuo nome</label>
+    <input id="myName" type="text" placeholder="es. Giulia" />
+    <label for="myNumber">Il tuo numero</label>
+    <select id="myNumber"></select>
+    <label>Genere</label>
+    <div class="gender-row">
+      <button type="button" id="genM" class="gender-btn">Uomo</button>
+      <button type="button" id="genF" class="gender-btn">Donna</button>
+    </div>
+    <button class="primary" id="startBtn">Entra</button>
+    <button id="orgBtn" style="width:100%;margin-top:10px;font-size:13px;color:var(--text-muted);">Sono l'organizzatore</button>
+  </div>
+
+  <div id="orgGate" class="hidden">
+    <label for="orgPwInput">Password organizzatore</label>
+    <input id="orgPwInput" type="password" placeholder="Inserisci la password" />
+    <button class="primary" id="orgUnlockBtn">Conferma</button>
+    <p id="orgPwError" class="empty hidden" style="color:var(--danger-text);">Password sbagliata, riprova.</p>
+  </div>
+
+  <div id="voting" class="hidden">
+    <div class="row-between">
+      <span style="font-size:14px;color:var(--text-secondary);">Sei <b id="meLabel" style="color:var(--text);"></b></span>
+    </div>
+
+    <div class="question-card">
+      <div class="question-hint">Domanda rompighiaccio del turno</div>
+      <div class="question-text" id="questionText">In attesa del primo turno...</div>
+    </div>
+
+    <div id="partnerArea"></div>
+    <button id="manualRefreshBtn" style="width:100%;margin-top:10px;font-size:13px;color:var(--text-muted);">Aggiorna adesso</button>
+  </div>
+
+  <div id="orgView" class="hidden">
+    <div class="row-between">
+      <span style="font-size:14px;color:var(--text-secondary);">Pannello organizzatore</span>
+      <button class="small-btn" id="orgBackBtn">Esci</button>
+    </div>
+
+    <div class="org-round-card">
+      <div class="org-round-label">Durata turno (secondi)</div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <input id="durationInput" type="number" min="10" step="10" value="420" style="margin-bottom:0;" />
+        <button id="setDurationBtn" style="white-space:nowrap;">Applica</button>
+      </div>
+      <div class="org-round-label" id="orgStatusLabel">Serata non ancora iniziata</div>
+      <div class="org-timer hidden" id="orgTimer">7:00</div>
+      <div class="org-round-number hidden" id="orgRoundNumber">Turno 1</div>
+      <div class="org-round-buttons">
+        <button id="startEventBtn" style="flex:1;">Avvia il turno 1</button>
+      </div>
+      <div class="org-round-buttons hidden" id="orgAdjustButtons" style="margin-top:8px;">
+        <button id="prevRoundBtn" style="flex:1;">Turno precedente</button>
+        <button id="nextRoundBtn" style="flex:1;">Turno successivo</button>
+      </div>
+    </div>
+
+    <button id="showAllMatchesBtn" style="width:100%;margin-bottom:16px;">Vedi tutti i match della serata</button>
+    <div class="list" id="orgMatchList"></div>
+  </div>
+</div>
+
+<script>
+const EVENT_PASSWORD = "Staseramibutto!";
+const MAX_SLOTS = 30;
+const DEFAULT_ROUND_MS = 7 * 60 * 1000;
+
+// ---- GitHub repo used as the shared database ----
+const GH_OWNER = "gervaantonino29-prog";
+const GH_REPO = "speeddate-gmail.com";
+const GH_BRANCH = "main";
+const GH_PATH = "data.json";
+const GH_TOKEN = "PASTE_TOKEN_HERE";
+
+let me = null;
+let myGender = null;
+let myNameVal = '';
+let syncTimer = null;
+let tickTimer = null;
+let orgTickTimer = null;
+let orgSyncTimer = null;
+
+let cachedConfig = { start: null, duration: DEFAULT_ROUND_MS };
+let cachedProfiles = {};
+let lastRenderedRound = null;
+
+const questions = [
+  "Se dovessi descriverti con un emoji, quale useresti e perché?",
+  "Qual è la cosa più strana che hai nel frigo in questo momento?",
+  "Se potessi avere una skill inutile ma divertente, quale sceglieresti?",
+  "Qual è l'ultima canzone che hai ascoltato in loop senza vergognarti?",
+  "Se la tua vita fosse un film, che genere sarebbe?",
+  "Qual è il tuo comfort food a qualsiasi ora del giorno?",
+  "Preferisci le montagne o il mare, e perché sei disposto/a a litigare per questo?",
+  "Qual è la app che usi di più e di cui ti vergogni un po'?",
+  "Se potessi teletrasportarti ovunque adesso, dove andresti?",
+  "Qual è la cosa più assurda che hai fatto per amore (o per un amico)?",
+  "Gatto o cane? Rispondi in meno di due secondi.",
+  "Qual è il tuo guilty pleasure televisivo?",
+  "Se dovessi cambiare nome domani, quale sceglieresti?",
+  "Qual è il piatto che sai cucinare meglio (o peggio)?",
+  "Se vincessi alla lotteria stasera, la prima cosa folle che compreresti?",
+  "Qual è un talento nascosto che quasi nessuno conosce di te?",
+];
+
+// ---- base64 helpers (UTF-8 safe) ----
+function b64encode(str){
+  return btoa(unescape(encodeURIComponent(str)));
+}
+function b64decode(b64){
+  return decodeURIComponent(escape(atob(b64.replace(/\n/g, ''))));
+}
+
+const GH_API = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
+const GH_HEADERS = {
+  'Authorization': 'Bearer ' + GH_TOKEN,
+  'Accept': 'application/vnd.github+json'
+};
+
+const DEFAULT_DATA = { config: { start: null, duration: DEFAULT_ROUND_MS }, profiles: {}, votes: {} };
+
+async function ghFetchFile(){
+  try{
+    const res = await fetch(GH_API, { headers: GH_HEADERS });
+    if(res.status === 404){
+      return { data: JSON.parse(JSON.stringify(DEFAULT_DATA)), sha: null };
+    }
+    if(!res.ok){
+      console.error('GitHub read error', res.status, await res.text());
+      return { data: JSON.parse(JSON.stringify(DEFAULT_DATA)), sha: null };
+    }
+    const json = await res.json();
+    const decoded = b64decode(json.content);
+    return { data: JSON.parse(decoded), sha: json.sha };
+  }catch(e){
+    console.error('GitHub fetch error', e);
+    return { data: JSON.parse(JSON.stringify(DEFAULT_DATA)), sha: null };
+  }
+}
+
+async function ghPutFile(data, sha){
+  const body = {
+    message: 'update speed date data',
+    content: b64encode(JSON.stringify(data)),
+    branch: GH_BRANCH
+  };
+  if(sha) body.sha = sha;
+  const res = await fetch(GH_API, {
+    method: 'PUT',
+    headers: { ...GH_HEADERS, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  return res;
+}
+
+// updateData: read-modify-write with automatic retry on conflict (409)
+async function updateData(mutatorFn){
+  for(let attempt = 0; attempt < 6; attempt++){
+    const { data, sha } = await ghFetchFile();
+    mutatorFn(data);
+    const res = await ghPutFile(data, sha);
+    if(res.ok) return data;
+    if(res.status === 409 || res.status === 422){
+      await new Promise(r=>setTimeout(r, 300 + Math.random()*400));
+      continue;
+    }
+    console.error('GitHub write failed', res.status, await res.text());
+    return data;
+  }
+  return null;
+}
+
+async function readData(){
+  const { data } = await ghFetchFile();
+  return data;
+}
+
+async function getConfig(){
+  const data = await readData();
+  return data.config || { start: null, duration: DEFAULT_ROUND_MS };
+}
+async function setConfig(cfg){
+  await updateData(data => { data.config = cfg; });
+}
+
+async function getAllProfiles(){
+  const data = await readData();
+  return data.profiles || {};
+}
+async function saveMyProfile(num, name, gender){
+  await updateData(data => {
+    if(!data.profiles) data.profiles = {};
+    data.profiles[num] = { name, gender };
+  });
+}
+
+async function getAllVotes(){
+  const data = await readData();
+  return data.votes || {};
+}
+async function setMyVote(myNum, targetNum, value){
+  await updateData(data => {
+    if(!data.votes) data.votes = {};
+    if(!data.votes[myNum]) data.votes[myNum] = {};
+    data.votes[myNum][targetNum] = value;
+  });
+}
+
+// ---- Round math ----
+
+function computeState(config){
+  if(!config.start) return { round: 0, remainingMs: 0 };
+  const roundMs = config.duration || DEFAULT_ROUND_MS;
+  const elapsed = Math.max(0, Date.now() - config.start);
+  const round = Math.floor(elapsed / roundMs) + 1;
+  const intoRound = elapsed % roundMs;
+  const remainingMs = roundMs - intoRound;
+  return { round, remainingMs };
+}
+
+function formatTime(ms){
+  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+function splitByGender(profiles){
+  const men = [], women = [];
+  for(const key of Object.keys(profiles)){
+    const n = parseInt(key, 10);
+    const p = profiles[key];
+    if(p.gender === 'M') men.push({ n, ...p });
+    else if(p.gender === 'F') women.push({ n, ...p });
+  }
+  men.sort((a,b)=>a.n-b.n);
+  women.sort((a,b)=>a.n-b.n);
+  return { men, women };
+}
+
+function partnerFor(myNum, myGender, round, men, women){
+  if(round <= 0) return null;
+  const r = round - 1;
+  if(myGender === 'M'){
+    if(women.length === 0) return null;
+    const myIdx = men.findIndex(p=>p.n===myNum);
+    if(myIdx === -1) return null;
+    return women[(myIdx + r) % women.length];
+  } else {
+    if(men.length === 0) return null;
+    const myIdx = women.findIndex(p=>p.n===myNum);
+    if(myIdx === -1) return null;
+    return men[((myIdx - r) % men.length + men.length) % men.length];
+  }
+}
+
+function questionForRound(round){
+  if(round <= 0) return "In attesa del primo turno...";
+  return questions[(round - 1) % questions.length];
+}
+
+function populateSelects(){
+  const myNumber = document.getElementById('myNumber');
+  myNumber.innerHTML = '';
+  for(let i=1;i<=MAX_SLOTS;i++){
+    const o = document.createElement('option');
+    o.value = i; o.textContent = 'Numero ' + i;
+    myNumber.appendChild(o);
+  }
+}
+populateSelects();
+
+document.getElementById('genM').addEventListener('click', ()=>{
+  myGender = 'M';
+  document.getElementById('genM').classList.add('active');
+  document.getElementById('genF').classList.remove('active');
+});
+document.getElementById('genF').addEventListener('click', ()=>{
+  myGender = 'F';
+  document.getElementById('genF').classList.add('active');
+  document.getElementById('genM').classList.remove('active');
+});
+
+// ---- Participant: sync (network) every 8s, tick (local redraw) every 1s ----
+
+async function syncParticipant(){
+  const data = await readData();
+  cachedConfig = data.config || { start: null, duration: DEFAULT_ROUND_MS };
+  cachedProfiles = data.profiles || {};
+}
+
+async function tickParticipant(){
+  const state = computeState(cachedConfig);
+  const round = state.round;
+  document.getElementById('questionText').textContent = questionForRound(round);
+  const partnerArea = document.getElementById('partnerArea');
+
+  if(round <= 0){
+    if(lastRenderedRound !== 0){
+      partnerArea.innerHTML = '<div class="empty">L\'organizzatore non ha ancora aperto il primo turno.</div>';
+      lastRenderedRound = 0;
+    }
+    return;
+  }
+
+  const { men, women } = splitByGender(cachedProfiles);
+  const partner = partnerFor(me, myGender, round, men, women);
+
+  if(round !== lastRenderedRound){
+    if(!partner){
+      partnerArea.innerHTML = '<div class="empty">Nessun/a partner disponibile per questo turno.</div>';
+      lastRenderedRound = round;
+      return;
+    }
+    const allVotes = await getAllVotes();
+    const myVotes = (allVotes[me]) || {};
+    const currentVote = myVotes[partner.n];
+    partnerArea.innerHTML =
+      '<div class="partner-card" id="partner-card-inner">' +
+        '<div class="partner-round">Turno ' + round + '</div>' +
+        '<div class="partner-name">' + partner.name + ' (n. ' + partner.n + ')</div>' +
+        '<div class="timer" id="partnerTimer">' + formatTime(state.remainingMs) + '</div>' +
+        '<div class="vote-row">' +
+          '<button id="voteYes" class="vote-btn yes' + (currentVote === true ? ' active' : '') + '"><i class="ti ti-heart"></i> Sì</button>' +
+          '<button id="voteNo" class="vote-btn no' + (currentVote === false ? ' active' : '') + '"><i class="ti ti-x"></i> No</button>' +
+        '</div>' +
+      '</div>';
+    document.getElementById('voteYes').addEventListener('click', async ()=>{
+      await setMyVote(me, partner.n, true);
+      lastRenderedRound = null;
+      tickParticipant();
+    });
+    document.getElementById('voteNo').addEventListener('click', async ()=>{
+      await setMyVote(me, partner.n, false);
+      lastRenderedRound = null;
+      tickParticipant();
+    });
+    lastRenderedRound = round;
+  } else {
+    const timerEl = document.getElementById('partnerTimer');
+    if(timerEl){
+      timerEl.textContent = formatTime(state.remainingMs);
+      timerEl.classList.toggle('warning', state.remainingMs < 30000);
+    }
+  }
+}
+
+document.getElementById('startBtn').addEventListener('click', async ()=>{
+  if(!myGender){
+    alert('Seleziona il genere prima di entrare');
+    return;
+  }
+  const numVal = document.getElementById('myNumber').value;
+  me = parseInt(numVal, 10);
+  myNameVal = document.getElementById('myName').value.trim() || ('Numero ' + me);
+  await saveMyProfile(me, myNameVal, myGender);
+  document.getElementById('meLabel').textContent = myNameVal + ' (n. ' + me + ')';
+  document.getElementById('setup').classList.add('hidden');
+  document.getElementById('voting').classList.remove('hidden');
+
+  await syncParticipant();
+  lastRenderedRound = null;
+  await tickParticipant();
+
+  if(tickTimer) clearInterval(tickTimer);
+  tickTimer = setInterval(tickParticipant, 1000);
+  if(syncTimer) clearInterval(syncTimer);
+  syncTimer = setInterval(syncParticipant, 8000);
+});
+
+document.getElementById('manualRefreshBtn').addEventListener('click', async ()=>{
+  await syncParticipant();
+  lastRenderedRound = null;
+  await tickParticipant();
+});
+
+// ---- Organizer ----
+
+document.getElementById('orgBtn').addEventListener('click', ()=>{
+  document.getElementById('setup').classList.add('hidden');
+  document.getElementById('orgGate').classList.remove('hidden');
+  document.getElementById('orgPwInput').value = '';
+  document.getElementById('orgPwError').classList.add('hidden');
+});
+
+document.getElementById('orgPwInput').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter') document.getElementById('orgUnlockBtn').click();
+});
+
+document.getElementById('orgUnlockBtn').addEventListener('click', async ()=>{
+  const pw = document.getElementById('orgPwInput').value;
+  if(pw !== EVENT_PASSWORD){
+    document.getElementById('orgPwError').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('orgGate').classList.add('hidden');
+  document.getElementById('orgView').classList.remove('hidden');
+
+  cachedConfig = await getConfig();
+  document.getElementById('durationInput').value = Math.round(cachedConfig.duration / 1000);
+  renderOrgTick();
+
+  if(orgTickTimer) clearInterval(orgTickTimer);
+  orgTickTimer = setInterval(renderOrgTick, 1000);
+  if(orgSyncTimer) clearInterval(orgSyncTimer);
+  orgSyncTimer = setInterval(async ()=>{ cachedConfig = await getConfig(); }, 5000);
+});
+
+function renderOrgTick(){
+  const state = computeState(cachedConfig);
+  const statusLabel = document.getElementById('orgStatusLabel');
+  const orgTimer = document.getElementById('orgTimer');
+  const orgRoundNumber = document.getElementById('orgRoundNumber');
+  const startBtn = document.getElementById('startEventBtn');
+  const adjustButtons = document.getElementById('orgAdjustButtons');
+
+  if(state.round <= 0){
+    statusLabel.textContent = 'Serata non ancora iniziata';
+    orgTimer.classList.add('hidden');
+    orgRoundNumber.classList.add('hidden');
+    startBtn.classList.remove('hidden');
+    adjustButtons.classList.add('hidden');
+  } else {
+    statusLabel.textContent = 'In corso';
+    orgTimer.classList.remove('hidden');
+    orgRoundNumber.classList.remove('hidden');
+    startBtn.classList.add('hidden');
+    adjustButtons.classList.remove('hidden');
+    orgTimer.textContent = formatTime(state.remainingMs);
+    orgTimer.classList.toggle('warning', state.remainingMs < 30000);
+    orgRoundNumber.textContent = 'Turno ' + state.round;
+  }
+}
+
+document.getElementById('setDurationBtn').addEventListener('click', async ()=>{
+  const secs = parseInt(document.getElementById('durationInput').value, 10);
+  if(!secs || secs < 5){
+    alert('Inserisci un numero di secondi valido (almeno 5).');
+    return;
+  }
+  cachedConfig.duration = secs * 1000;
+  await setConfig(cachedConfig);
+  renderOrgTick();
+});
+
+document.getElementById('startEventBtn').addEventListener('click', async ()=>{
+  cachedConfig.start = Date.now();
+  await setConfig(cachedConfig);
+  renderOrgTick();
+});
+
+document.getElementById('nextRoundBtn').addEventListener('click', async ()=>{
+  const state = computeState(cachedConfig);
+  const newRound = state.round + 1;
+  cachedConfig.start = Date.now() - (newRound - 1) * cachedConfig.duration;
+  await setConfig(cachedConfig);
+  renderOrgTick();
+});
+
+document.getElementById('prevRoundBtn').addEventListener('click', async ()=>{
+  const state = computeState(cachedConfig);
+  const newRound = state.round - 1;
+  if(newRound <= 0){
+    cachedConfig.start = null;
+  } else {
+    cachedConfig.start = Date.now() - (newRound - 1) * cachedConfig.duration;
+  }
+  await setConfig(cachedConfig);
+  renderOrgTick();
+});
+
+document.getElementById('showAllMatchesBtn').addEventListener('click', async ()=>{
+  const orgMatchList = document.getElementById('orgMatchList');
+  orgMatchList.innerHTML = '<div class="empty">Calcolo in corso...</div>';
+
+  const data = await readData();
+  const profiles = data.profiles || {};
+  const allVotes = data.votes || {};
+
+  const pairs = [];
+  const seen = new Set();
+  for(const a of Object.keys(profiles)){
+    const votesA = allVotes[a] || {};
+    for(const b of Object.keys(votesA)){
+      if(!votesA[b]) continue;
+      if(!profiles[b]) continue;
+      const votesB = allVotes[b] || {};
+      if(!votesB[a]) continue;
+      const key = [a,b].sort().join('-');
+      if(seen.has(key)) continue;
+      seen.add(key);
+      pairs.push({ a, b });
+    }
+  }
+  if(pairs.length === 0){
+    orgMatchList.innerHTML = '<div class="empty">Nessun match ancora registrato.</div>';
+  } else {
+    orgMatchList.innerHTML = pairs.map(pr=>{
+      const nameA = profiles[pr.a].name + ' (n. ' + pr.a + ')';
+      const nameB = profiles[pr.b].name + ' (n. ' + pr.b + ')';
+      return '<div class="match-row"><i class="ti ti-heart"></i><span>' + nameA + ' + ' + nameB + '</span></div>';
+    }).join('');
+  }
+});
+
+document.getElementById('orgBackBtn').addEventListener('click', ()=>{
+  if(orgTickTimer) clearInterval(orgTickTimer);
+  if(orgSyncTimer) clearInterval(orgSyncTimer);
+  document.getElementById('orgView').classList.add('hidden');
+  document.getElementById('setup').classList.remove('hidden');
+});
+</script>
+</body>
+</html>
