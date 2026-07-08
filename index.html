@@ -189,6 +189,9 @@
 
     <button id="showParticipantsBtn" style="width:100%;margin-top:16px;margin-bottom:16px;">Vedi elenco iscritti</button>
     <div class="list" id="orgParticipantsList"></div>
+
+    <button id="showPairingsBtn" style="width:100%;margin-top:16px;margin-bottom:16px;">Vedi abbinamenti turno attuale</button>
+    <div class="list" id="orgPairingsList"></div>
   </div>
 </div>
 
@@ -307,10 +310,10 @@ async function getAllProfiles(){
   const data = await readData();
   return data.profiles || {};
 }
-async function saveMyProfile(num, name, gender){
+async function saveMyProfile(id, num, name, gender){
   await updateData(data => {
     if(!data.profiles) data.profiles = {};
-    data.profiles[num] = { name, gender };
+    data.profiles[id] = { name, gender, num };
   });
 }
 
@@ -347,28 +350,27 @@ function formatTime(ms){
 
 function splitByGender(profiles){
   const men = [], women = [];
-  for(const key of Object.keys(profiles)){
-    const n = parseInt(key, 10);
-    const p = profiles[key];
-    if(p.gender === 'M') men.push({ n, ...p });
-    else if(p.gender === 'F') women.push({ n, ...p });
+  for(const id of Object.keys(profiles)){
+    const p = profiles[id];
+    if(p.gender === 'M') men.push({ id, n: p.num, name: p.name, gender: p.gender });
+    else if(p.gender === 'F') women.push({ id, n: p.num, name: p.name, gender: p.gender });
   }
   men.sort((a,b)=>a.n-b.n);
   women.sort((a,b)=>a.n-b.n);
   return { men, women };
 }
 
-function partnerFor(myNum, myGender, round, men, women){
+function partnerFor(myId, myGender, round, men, women){
   if(round <= 0) return null;
   const r = round - 1;
   if(myGender === 'M'){
     if(women.length === 0) return null;
-    const myIdx = men.findIndex(p=>p.n===myNum);
+    const myIdx = men.findIndex(p=>p.id===myId);
     if(myIdx === -1) return null;
     return women[(myIdx + r) % women.length];
   } else {
     if(men.length === 0) return null;
-    const myIdx = women.findIndex(p=>p.n===myNum);
+    const myIdx = women.findIndex(p=>p.id===myId);
     if(myIdx === -1) return null;
     return men[((myIdx - r) % men.length + men.length) % men.length];
   }
@@ -434,7 +436,7 @@ async function tickParticipant(){
     }
     const allVotes = await getAllVotes();
     const myVotes = (allVotes[me]) || {};
-    const currentVote = myVotes[partner.n];
+    const currentVote = myVotes[partner.id];
     partnerArea.innerHTML =
       '<div class="partner-card" id="partner-card-inner">' +
         '<div class="partner-round">Turno ' + round + '</div>' +
@@ -446,12 +448,12 @@ async function tickParticipant(){
         '</div>' +
       '</div>';
     document.getElementById('voteYes').addEventListener('click', async ()=>{
-      await setMyVote(me, partner.n, true);
+      await setMyVote(me, partner.id, true);
       lastRenderedRound = null;
       tickParticipant();
     });
     document.getElementById('voteNo').addEventListener('click', async ()=>{
-      await setMyVote(me, partner.n, false);
+      await setMyVote(me, partner.id, false);
       lastRenderedRound = null;
       tickParticipant();
     });
@@ -470,11 +472,11 @@ document.getElementById('startBtn').addEventListener('click', async ()=>{
     alert('Seleziona il genere prima di entrare');
     return;
   }
-  const numVal = document.getElementById('myNumber').value;
-  me = parseInt(numVal, 10);
-  myNameVal = document.getElementById('myName').value.trim() || ('Numero ' + me);
-  await saveMyProfile(me, myNameVal, myGender);
-  document.getElementById('meLabel').textContent = myNameVal + ' (n. ' + me + ')';
+  const numVal = parseInt(document.getElementById('myNumber').value, 10);
+  me = myGender + numVal;
+  myNameVal = document.getElementById('myName').value.trim() || ('Numero ' + numVal);
+  await saveMyProfile(me, numVal, myNameVal, myGender);
+  document.getElementById('meLabel').textContent = myNameVal + ' (n. ' + numVal + ')';
   document.getElementById('setup').classList.add('hidden');
   document.getElementById('voting').classList.remove('hidden');
 
@@ -627,8 +629,8 @@ document.getElementById('showAllMatchesBtn').addEventListener('click', async ()=
     orgMatchList.innerHTML = '<div class="empty">Nessun match ancora registrato.</div>';
   } else {
     orgMatchList.innerHTML = pairs.map(pr=>{
-      const nameA = profiles[pr.a].name + ' (n. ' + pr.a + ')';
-      const nameB = profiles[pr.b].name + ' (n. ' + pr.b + ')';
+      const nameA = profiles[pr.a].name + ' (n. ' + profiles[pr.a].num + ')';
+      const nameB = profiles[pr.b].name + ' (n. ' + profiles[pr.b].num + ')';
       return '<div class="match-row"><i class="ti ti-heart"></i><span>' + nameA + ' + ' + nameB + '</span></div>';
     }).join('');
   }
@@ -647,10 +649,62 @@ document.getElementById('showParticipantsBtn').addEventListener('click', async (
     return;
   }
 
-  let html = '<div class="empty" style="text-align:left;padding:8px 0;">Uomini (' + men.length + ')</div>';
-  html += men.map(p => '<div class="row"><span>' + p.name + ' (n. ' + p.n + ')</span></div>').join('');
-  html += '<div class="empty" style="text-align:left;padding:8px 0;">Donne (' + women.length + ')</div>';
-  html += women.map(p => '<div class="row"><span>' + p.name + ' (n. ' + p.n + ')</span></div>').join('');
+  const rows = Math.max(men.length, women.length);
+  let html = '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
+    '<div style="flex:1;font-size:12px;color:var(--text-muted);">Uomini (' + men.length + ')</div>' +
+    '<div style="flex:1;font-size:12px;color:var(--text-muted);text-align:right;">Donne (' + women.length + ')</div>' +
+  '</div>';
+  for(let i=0;i<rows;i++){
+    const m = men[i];
+    const w = women[i];
+    html += '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
+      '<div style="flex:1;padding:10px 12px;background:var(--card);border:0.5px solid var(--border);border-radius:8px;font-size:14px;">' +
+        (m ? m.name + ' (n. ' + m.n + ')' : '') +
+      '</div>' +
+      '<div style="flex:1;padding:10px 12px;background:var(--card);border:0.5px solid var(--border);border-radius:8px;font-size:14px;text-align:right;">' +
+        (w ? w.name + ' (n. ' + w.n + ')' : '') +
+      '</div>' +
+    '</div>';
+  }
+  listEl.innerHTML = html;
+});
+
+document.getElementById('showPairingsBtn').addEventListener('click', async ()=>{
+  const listEl = document.getElementById('orgPairingsList');
+  listEl.innerHTML = '<div class="empty">Caricamento...</div>';
+
+  const data = await readData();
+  const profiles = data.profiles || {};
+  const config = data.config || { start: null, duration: DEFAULT_ROUND_MS };
+  const { men, women } = splitByGender(profiles);
+  const state = computeState(config);
+
+  if(state.round <= 0){
+    listEl.innerHTML = '<div class="empty">Nessun turno attivo al momento.</div>';
+    return;
+  }
+  if(men.length === 0 || women.length === 0){
+    listEl.innerHTML = '<div class="empty">Servono sia uomini che donne registrati.</div>';
+    return;
+  }
+
+  let html = '<div class="empty" style="text-align:center;margin-bottom:8px;">Turno ' + state.round + '</div>';
+  html += '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
+    '<div style="flex:1;font-size:12px;color:var(--text-muted);">Uomini</div>' +
+    '<div style="flex:1;font-size:12px;color:var(--text-muted);text-align:right;">Donne</div>' +
+  '</div>';
+
+  women.forEach((w, i) => {
+    const partner = partnerFor(w.id, 'F', state.round, men, women);
+    html += '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
+      '<div style="flex:1;padding:10px 12px;background:var(--card);border:0.5px solid var(--border);border-radius:8px;font-size:14px;">' +
+        (partner ? partner.name + ' (n. ' + partner.n + ')' : '—') +
+      '</div>' +
+      '<div style="flex:1;padding:10px 12px;background:var(--card);border:0.5px solid var(--border);border-radius:8px;font-size:14px;text-align:right;">' +
+        w.name + ' (n. ' + w.n + ')' +
+      '</div>' +
+    '</div>';
+  });
   listEl.innerHTML = html;
 });
 
