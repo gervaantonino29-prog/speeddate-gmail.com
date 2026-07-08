@@ -614,12 +614,16 @@ document.getElementById('startEventBtn').addEventListener('click', async ()=>{
   const check = await getConfig();
   document.getElementById('orgDebug').textContent = 'Scritto: start=' + cachedConfig.start + ' | Riletto: start=' + (check.start || 'null') + ' | Errore: ' + (lastWriteError || 'nessuno');
   renderOrgTick();
+  renderParticipantsView();
+  renderPairingsView();
 });
 
 document.getElementById('stopEventBtn').addEventListener('click', async ()=>{
   cachedConfig.start = null;
   await setConfig(cachedConfig);
   renderOrgTick();
+  renderParticipantsView();
+  renderPairingsView();
 });
 
 document.getElementById('nextRoundBtn').addEventListener('click', async ()=>{
@@ -628,6 +632,8 @@ document.getElementById('nextRoundBtn').addEventListener('click', async ()=>{
   cachedConfig.start = Date.now() - (newRound - 1) * cachedConfig.duration;
   await setConfig(cachedConfig);
   renderOrgTick();
+  renderParticipantsView();
+  renderPairingsView();
 });
 
 document.getElementById('prevRoundBtn').addEventListener('click', async ()=>{
@@ -640,6 +646,8 @@ document.getElementById('prevRoundBtn').addEventListener('click', async ()=>{
   }
   await setConfig(cachedConfig);
   renderOrgTick();
+  renderParticipantsView();
+  renderPairingsView();
 });
 
 document.getElementById('showAllMatchesBtn').addEventListener('click', async ()=>{
@@ -676,7 +684,7 @@ document.getElementById('showAllMatchesBtn').addEventListener('click', async ()=
   }
 });
 
-document.getElementById('showParticipantsBtn').addEventListener('click', async ()=>{
+async function renderParticipantsView(){
   const listEl = document.getElementById('orgParticipantsList');
   listEl.innerHTML = '<div class="empty">Caricamento...</div>';
 
@@ -707,9 +715,11 @@ document.getElementById('showParticipantsBtn').addEventListener('click', async (
     '</div>';
   }
   listEl.innerHTML = html;
-});
+}
 
-document.getElementById('showPairingsBtn').addEventListener('click', async ()=>{
+document.getElementById('showParticipantsBtn').addEventListener('click', renderParticipantsView);
+
+async function renderPairingsView(){
   const listEl = document.getElementById('orgPairingsList');
   listEl.innerHTML = '<div class="empty">Caricamento...</div>';
 
@@ -762,7 +772,9 @@ document.getElementById('showPairingsBtn').addEventListener('click', async ()=>{
   }
 
   listEl.innerHTML = html;
-});
+}
+
+document.getElementById('showPairingsBtn').addEventListener('click', renderPairingsView);
 
 document.getElementById('resetVotesBtn').addEventListener('click', async ()=>{
   const sure = confirm('Azzerare solo i voti e i match? Gli iscritti restano. Non si può annullare.');
