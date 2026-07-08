@@ -181,10 +181,14 @@
         <button id="prevRoundBtn" style="flex:1;">Turno precedente</button>
         <button id="nextRoundBtn" style="flex:1;">Turno successivo</button>
       </div>
+      <button id="stopEventBtn" class="hidden" style="width:100%;margin-top:8px;color:var(--danger-text);">Ferma i turni</button>
     </div>
 
     <button id="showAllMatchesBtn" style="width:100%;margin-bottom:16px;">Vedi tutti i match della serata</button>
     <div class="list" id="orgMatchList"></div>
+
+    <button id="showParticipantsBtn" style="width:100%;margin-top:16px;margin-bottom:16px;">Vedi elenco iscritti</button>
+    <div class="list" id="orgParticipantsList"></div>
   </div>
 </div>
 
@@ -529,6 +533,7 @@ function renderOrgTick(){
   const orgRoundNumber = document.getElementById('orgRoundNumber');
   const startBtn = document.getElementById('startEventBtn');
   const adjustButtons = document.getElementById('orgAdjustButtons');
+  const stopBtn = document.getElementById('stopEventBtn');
 
   if(state.round <= 0){
     statusLabel.textContent = 'Serata non ancora iniziata';
@@ -536,12 +541,14 @@ function renderOrgTick(){
     orgRoundNumber.classList.add('hidden');
     startBtn.classList.remove('hidden');
     adjustButtons.classList.add('hidden');
+    stopBtn.classList.add('hidden');
   } else {
     statusLabel.textContent = 'In corso';
     orgTimer.classList.remove('hidden');
     orgRoundNumber.classList.remove('hidden');
     startBtn.classList.add('hidden');
     adjustButtons.classList.remove('hidden');
+    stopBtn.classList.remove('hidden');
     orgTimer.textContent = formatTime(state.remainingMs);
     orgTimer.classList.toggle('warning', state.remainingMs < 30000);
     orgRoundNumber.textContent = 'Turno ' + state.round;
@@ -564,6 +571,12 @@ document.getElementById('startEventBtn').addEventListener('click', async ()=>{
   await setConfig(cachedConfig);
   const check = await getConfig();
   document.getElementById('orgDebug').textContent = 'Scritto: start=' + cachedConfig.start + ' | Riletto: start=' + (check.start || 'null') + ' | Errore: ' + (lastWriteError || 'nessuno');
+  renderOrgTick();
+});
+
+document.getElementById('stopEventBtn').addEventListener('click', async ()=>{
+  cachedConfig.start = null;
+  await setConfig(cachedConfig);
   renderOrgTick();
 });
 
@@ -619,6 +632,26 @@ document.getElementById('showAllMatchesBtn').addEventListener('click', async ()=
       return '<div class="match-row"><i class="ti ti-heart"></i><span>' + nameA + ' + ' + nameB + '</span></div>';
     }).join('');
   }
+});
+
+document.getElementById('showParticipantsBtn').addEventListener('click', async ()=>{
+  const listEl = document.getElementById('orgParticipantsList');
+  listEl.innerHTML = '<div class="empty">Caricamento...</div>';
+
+  const data = await readData();
+  const profiles = data.profiles || {};
+  const { men, women } = splitByGender(profiles);
+
+  if(men.length === 0 && women.length === 0){
+    listEl.innerHTML = '<div class="empty">Nessun iscritto ancora.</div>';
+    return;
+  }
+
+  let html = '<div class="empty" style="text-align:left;padding:8px 0;">Uomini (' + men.length + ')</div>';
+  html += men.map(p => '<div class="row"><span>' + p.name + ' (n. ' + p.n + ')</span></div>').join('');
+  html += '<div class="empty" style="text-align:left;padding:8px 0;">Donne (' + women.length + ')</div>';
+  html += women.map(p => '<div class="row"><span>' + p.name + ' (n. ' + p.n + ')</span></div>').join('');
+  listEl.innerHTML = html;
 });
 
 document.getElementById('orgBackBtn').addEventListener('click', ()=>{
