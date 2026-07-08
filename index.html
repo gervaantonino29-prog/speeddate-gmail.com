@@ -149,8 +149,8 @@
       <span style="font-size:14px;color:var(--text-secondary);">Sei <b id="meLabel" style="color:var(--text);"></b></span>
     </div>
 
-    <div class="question-card">
-      <div class="question-hint">Domanda rompighiaccio del turno</div>
+    <div class="question-card" id="questionCard" style="cursor:pointer;">
+      <div class="question-hint">Domanda rompighiaccio · tocca per cambiarla</div>
       <div class="question-text" id="questionText">In attesa del primo turno...</div>
     </div>
 
@@ -189,7 +189,8 @@
         <button id="prevRoundBtn" style="flex:1;">Turno precedente</button>
         <button id="nextRoundBtn" style="flex:1;">Turno successivo</button>
       </div>
-      <button id="stopEventBtn" class="hidden" style="width:100%;margin-top:8px;color:var(--danger-text);">Ferma i turni</button>
+      <button id="stopEventBtn" class="hidden" style="width:100%;margin-top:8px;color:var(--danger-text);">Metti in pausa</button>
+      <button id="resumeEventBtn" class="hidden" style="width:100%;margin-top:8px;color:var(--success-text);">Riprendi</button>
     </div>
 
     <button id="showAllMatchesBtn" style="width:100%;margin-bottom:16px;">Vedi tutti i match della serata</button>
@@ -214,7 +215,7 @@ const DEFAULT_ROUND_MS = 7 * 60 * 1000;
 // ---- Shared database via Cloudflare Worker proxy (token stays hidden server-side) ----
 const WORKER_URL = "https://gentle-lake-ab76.gerva-antonino29.workers.dev/";
 
-const DEFAULT_DATA = { config: { start: null, duration: DEFAULT_ROUND_MS }, profiles: {}, votes: {} };
+const DEFAULT_DATA = { config: { round: 0, roundStartedAt: null, duration: DEFAULT_ROUND_MS }, profiles: {}, votes: {} };
 
 async function ghFetchFile(){
   try{
@@ -264,7 +265,7 @@ let tickTimer = null;
 let orgTickTimer = null;
 let orgSyncTimer = null;
 
-let cachedConfig = { start: null, duration: DEFAULT_ROUND_MS };
+let cachedConfig = { round: 0, roundStartedAt: null, duration: DEFAULT_ROUND_MS };
 let cachedProfiles = {};
 let lastRenderedRound = null;
 
@@ -311,7 +312,7 @@ async function readData(){
 
 async function getConfig(){
   const data = await readData();
-  return data.config || { start: null, duration: DEFAULT_ROUND_MS };
+  return data.config || { round: 0, roundStartedAt: null, duration: DEFAULT_ROUND_MS };
 }
 async function setConfig(cfg){
   await updateData(data => { data.config = cfg; });
@@ -343,12 +344,11 @@ async function setMyVote(myNum, targetNum, value){
 // ---- Round math ----
 
 function computeState(config){
-  if(!config.start) return { round: 0, remainingMs: 0 };
+  const round = config.round || 0;
+  if(round <= 0) return { round: 0, remainingMs: 0 };
   const roundMs = config.duration || DEFAULT_ROUND_MS;
-  const elapsed = Math.max(0, Date.now() - config.start);
-  const round = Math.floor(elapsed / roundMs) + 1;
-  const intoRound = elapsed % roundMs;
-  const remainingMs = roundMs - intoRound;
+  const elapsed = config.roundStartedAt ? Math.max(0, Date.now() - config.roundStartedAt) : 0;
+  const remainingMs = Math.max(0, roundMs - elapsed);
   return { round, remainingMs };
 }
 
@@ -384,12 +384,12 @@ function partnerFor(myId, myGender, round, men, women){
   if(iAmInSmaller){
     const myIdx = smaller.findIndex(p=>p.id===myId);
     if(myIdx === -1) return null;
-    const bIdx = (myIdx + r) % bigger.length;
+    const bIdx = ((myIdx - r) % bigger.length + bigger.length) % bigger.length;
     return bigger[bIdx];
   } else {
     const myIdx = bigger.findIndex(p=>p.id===myId);
     if(myIdx === -1) return null;
-    const s = ((myIdx - r) % bigger.length + bigger.length) % bigger.length;
+    const s = (myIdx + r) % bigger.length;
     if(s < smaller.length) return smaller[s];
     return null; // resting this round: more people in my group than the other
   }
@@ -399,6 +399,19 @@ function questionForRound(round){
   if(round <= 0) return "In attesa del primo turno...";
   return questions[(round - 1) % questions.length];
 }
+
+let questionOverride = null;
+let questionOverrideRound = null;
+
+document.getElementById('questionCard').addEventListener('click', ()=>{
+  const round = computeState(cachedConfig).round;
+  const current = document.getElementById('questionText').textContent;
+  let idx;
+  do{ idx = Math.floor(Math.random() * questions.length); }while(questions.length > 1 && questions[idx] === current);
+  questionOverride = questions[idx];
+  questionOverrideRound = round;
+  document.getElementById('questionText').textContent = questionOverride;
+});
 
 function populateSelects(){
   const myNumber = document.getElementById('myNumber');
@@ -435,7 +448,7 @@ document.getElementById('genF').addEventListener('click', ()=>{
 
 async function syncParticipant(){
   const data = await readData();
-  cachedConfig = data.config || { start: null, duration: DEFAULT_ROUND_MS };
+  cachedConfig = data.config || { round: 0, roundStartedAt: null, duration: DEFAULT_ROUND_MS };
   cachedProfiles = data.profiles || {};
   if(data.eventName){
     document.getElementById('eventNameLabel').textContent = data.eventName;
@@ -445,7 +458,11 @@ async function syncParticipant(){
 async function tickParticipant(){
   const state = computeState(cachedConfig);
   const round = state.round;
-  document.getElementById('questionText').textContent = questionForRound(round);
+  if(round !== questionOverrideRound){
+    questionOverride = null;
+    questionOverrideRound = round;
+  }
+  document.getElementById('questionText').textContent = questionOverride || questionForRound(round);
   const partnerArea = document.getElementById('partnerArea');
 
   if(round <= 0){
@@ -570,6 +587,8 @@ function renderOrgTick(){
   const startBtn = document.getElementById('startEventBtn');
   const adjustButtons = document.getElementById('orgAdjustButtons');
   const stopBtn = document.getElementById('stopEventBtn');
+  const resumeBtn = document.getElementById('resumeEventBtn');
+  const paused = !!cachedConfig.paused;
 
   if(state.round <= 0){
     statusLabel.textContent = 'Serata non ancora iniziata';
@@ -578,6 +597,16 @@ function renderOrgTick(){
     startBtn.classList.remove('hidden');
     adjustButtons.classList.add('hidden');
     stopBtn.classList.add('hidden');
+    resumeBtn.classList.add('hidden');
+  } else if(paused){
+    statusLabel.textContent = 'In pausa (turno ' + state.round + ')';
+    orgTimer.classList.add('hidden');
+    orgRoundNumber.classList.remove('hidden');
+    orgRoundNumber.textContent = 'Turno ' + state.round + ' — in pausa';
+    startBtn.classList.add('hidden');
+    adjustButtons.classList.remove('hidden');
+    stopBtn.classList.add('hidden');
+    resumeBtn.classList.remove('hidden');
   } else {
     statusLabel.textContent = 'In corso';
     orgTimer.classList.remove('hidden');
@@ -585,6 +614,7 @@ function renderOrgTick(){
     startBtn.classList.add('hidden');
     adjustButtons.classList.remove('hidden');
     stopBtn.classList.remove('hidden');
+    resumeBtn.classList.add('hidden');
     orgTimer.textContent = formatTime(state.remainingMs);
     orgTimer.classList.toggle('warning', state.remainingMs < 30000);
     orgRoundNumber.textContent = 'Turno ' + state.round;
@@ -609,17 +639,28 @@ document.getElementById('setDurationBtn').addEventListener('click', async ()=>{
 });
 
 document.getElementById('startEventBtn').addEventListener('click', async ()=>{
-  cachedConfig.start = Date.now();
+  cachedConfig.round = 1;
+  cachedConfig.roundStartedAt = Date.now();
+  cachedConfig.paused = false;
   await setConfig(cachedConfig);
   const check = await getConfig();
-  document.getElementById('orgDebug').textContent = 'Scritto: start=' + cachedConfig.start + ' | Riletto: start=' + (check.start || 'null') + ' | Errore: ' + (lastWriteError || 'nessuno');
+  document.getElementById('orgDebug').textContent = 'Scritto: round=' + cachedConfig.round + ' | Riletto: round=' + (check.round || 0) + ' | Errore: ' + (lastWriteError || 'nessuno');
   renderOrgTick();
   renderParticipantsView();
   renderPairingsView();
 });
 
 document.getElementById('stopEventBtn').addEventListener('click', async ()=>{
-  cachedConfig.start = null;
+  cachedConfig.paused = true;
+  await setConfig(cachedConfig);
+  renderOrgTick();
+  renderParticipantsView();
+  renderPairingsView();
+});
+
+document.getElementById('resumeEventBtn').addEventListener('click', async ()=>{
+  cachedConfig.paused = false;
+  cachedConfig.roundStartedAt = Date.now();
   await setConfig(cachedConfig);
   renderOrgTick();
   renderParticipantsView();
@@ -627,9 +668,9 @@ document.getElementById('stopEventBtn').addEventListener('click', async ()=>{
 });
 
 document.getElementById('nextRoundBtn').addEventListener('click', async ()=>{
-  const state = computeState(cachedConfig);
-  const newRound = state.round + 1;
-  cachedConfig.start = Date.now() - (newRound - 1) * cachedConfig.duration;
+  cachedConfig.round = (cachedConfig.round || 0) + 1;
+  cachedConfig.roundStartedAt = Date.now();
+  cachedConfig.paused = false;
   await setConfig(cachedConfig);
   renderOrgTick();
   renderParticipantsView();
@@ -637,12 +678,14 @@ document.getElementById('nextRoundBtn').addEventListener('click', async ()=>{
 });
 
 document.getElementById('prevRoundBtn').addEventListener('click', async ()=>{
-  const state = computeState(cachedConfig);
-  const newRound = state.round - 1;
+  const newRound = (cachedConfig.round || 0) - 1;
+  cachedConfig.paused = false;
   if(newRound <= 0){
-    cachedConfig.start = null;
+    cachedConfig.round = 0;
+    cachedConfig.roundStartedAt = null;
   } else {
-    cachedConfig.start = Date.now() - (newRound - 1) * cachedConfig.duration;
+    cachedConfig.round = newRound;
+    cachedConfig.roundStartedAt = Date.now();
   }
   await setConfig(cachedConfig);
   renderOrgTick();
@@ -725,7 +768,7 @@ async function renderPairingsView(){
 
   const data = await readData();
   const profiles = data.profiles || {};
-  const config = data.config || { start: null, duration: DEFAULT_ROUND_MS };
+  const config = data.config || { round: 0, roundStartedAt: null, duration: DEFAULT_ROUND_MS };
   const { men, women } = splitByGender(profiles);
   const state = computeState(config);
 
@@ -792,7 +835,7 @@ document.getElementById('resetParticipantsBtn').addEventListener('click', async 
   await updateData(data => {
     data.profiles = {};
     data.votes = {};
-    data.config = { start: null, duration: data.config ? data.config.duration : DEFAULT_ROUND_MS };
+    data.config = { round: 0, roundStartedAt: null, paused: false, duration: data.config ? data.config.duration : DEFAULT_ROUND_MS };
   });
   cachedConfig = await getConfig();
   renderOrgTick();
