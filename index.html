@@ -362,17 +362,25 @@ function splitByGender(profiles){
 
 function partnerFor(myId, myGender, round, men, women){
   if(round <= 0) return null;
+  if(men.length === 0 || women.length === 0) return null;
   const r = round - 1;
-  if(myGender === 'M'){
-    if(women.length === 0) return null;
-    const myIdx = men.findIndex(p=>p.id===myId);
+
+  const smallerIsMen = men.length <= women.length;
+  const smaller = smallerIsMen ? men : women;
+  const bigger = smallerIsMen ? women : men;
+  const iAmInSmaller = (smallerIsMen && myGender === 'M') || (!smallerIsMen && myGender === 'F');
+
+  if(iAmInSmaller){
+    const myIdx = smaller.findIndex(p=>p.id===myId);
     if(myIdx === -1) return null;
-    return women[(myIdx + r) % women.length];
+    const bIdx = (myIdx + r) % bigger.length;
+    return bigger[bIdx];
   } else {
-    if(men.length === 0) return null;
-    const myIdx = women.findIndex(p=>p.id===myId);
+    const myIdx = bigger.findIndex(p=>p.id===myId);
     if(myIdx === -1) return null;
-    return men[((myIdx - r) % men.length + men.length) % men.length];
+    const s = ((myIdx - r) % bigger.length + bigger.length) % bigger.length;
+    if(s < smaller.length) return smaller[s];
+    return null; // resting this round: more people in my group than the other
   }
 }
 
@@ -430,7 +438,7 @@ async function tickParticipant(){
 
   if(round !== lastRenderedRound){
     if(!partner){
-      partnerArea.innerHTML = '<div class="empty">Nessun/a partner disponibile per questo turno.</div>';
+      partnerArea.innerHTML = '<div class="empty">Sei in pausa questo turno (numeri sbilanciati tra uomini e donne). Ripartirai al prossimo giro.</div>';
       lastRenderedRound = round;
       return;
     }
@@ -705,6 +713,22 @@ document.getElementById('showPairingsBtn').addEventListener('click', async ()=>{
       '</div>' +
     '</div>';
   });
+
+  const pairedIds = new Set();
+  women.forEach(w => {
+    const partner = partnerFor(w.id, 'F', state.round, men, women);
+    if(partner) pairedIds.add(partner.id);
+    pairedIds.add(w.id);
+  });
+  const restingMen = men.filter(m => !pairedIds.has(m.id));
+  const restingWomen = women.filter(w => !pairedIds.has(w.id));
+  const resting = [...restingMen, ...restingWomen];
+
+  if(resting.length > 0){
+    html += '<div class="empty" style="text-align:center;margin-top:16px;margin-bottom:8px;">In pausa questo turno</div>';
+    html += resting.map(p => '<div class="row"><span>' + p.name + ' (n. ' + p.n + ', ' + (p.gender === 'M' ? 'Uomo' : 'Donna') + ')</span></div>').join('');
+  }
+
   listEl.innerHTML = html;
 });
 
