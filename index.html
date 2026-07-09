@@ -1067,14 +1067,20 @@ async function renderPairingsView(){
 document.getElementById('showPairingsBtn').addEventListener('click', renderPairingsView);
 
 document.getElementById('resetVotesBtn').addEventListener('click', async ()=>{
-  const sure = confirm('Azzerare solo i voti e i match? Gli iscritti restano. Non si può annullare.');
+  const sure = confirm('Azzerare voti e match e ricominciare dal turno 1? Gli iscritti restano. Non si può annullare.');
   if(!sure) return;
   await updateData(data => {
     data.votes = {};
     data.finalChoices = {};
+    data.finished = false;
+    data.config = { round: 1, roundStartedAt: Date.now(), paused: false, duration: data.config ? data.config.duration : DEFAULT_ROUND_MS };
   });
+  cachedConfig = await getConfig();
+  renderOrgTick();
+  renderParticipantsView();
+  renderPairingsView();
   document.getElementById('orgMatchList').innerHTML = '';
-  alert('Voti e match azzerati.');
+  alert('Voti e match azzerati, si riparte dal turno 1.');
 });
 
 document.getElementById('resetParticipantsBtn').addEventListener('click', async ()=>{
