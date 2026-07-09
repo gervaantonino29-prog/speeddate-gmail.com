@@ -201,7 +201,11 @@
     <button id="showParticipantsBtn" style="width:100%;margin-top:16px;margin-bottom:16px;">Vedi elenco iscritti</button>
     <div class="list" id="orgParticipantsList"></div>
 
-    <button id="showPairingsBtn" style="width:100%;margin-top:16px;margin-bottom:16px;">Vedi abbinamenti turno attuale</button>
+    <div class="org-round-label" style="margin-top:16px;">Vedi abbinamenti di un turno specifico</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <input id="pairingsRoundInput" type="number" min="1" placeholder="es. 3" style="margin-bottom:0;" />
+      <button id="showPairingsBtn" style="white-space:nowrap;">Vedi</button>
+    </div>
     <div class="list" id="orgPairingsList"></div>
 
     <button id="resetVotesBtn" style="width:100%;margin-top:16px;color:var(--danger-text);">Azzera solo voti/match</button>
@@ -421,9 +425,19 @@ function partnerFor(myId, myGender, round, men, women){
   }
 }
 
+function hashSeed(str){
+  let hash = 0;
+  for(let i=0;i<str.length;i++){
+    hash = (hash * 31 + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
 function questionForRound(round){
   if(round <= 0) return "In attesa del primo turno...";
-  return questions[(round - 1) % questions.length];
+  const seed = (me || 'x') + '-' + round;
+  const idx = hashSeed(seed) % questions.length;
+  return questions[idx];
 }
 
 let questionOverride = null;
@@ -845,9 +859,13 @@ async function renderPairingsView(){
   const profiles = data.profiles || {};
   const config = data.config || { round: 0, roundStartedAt: null, duration: DEFAULT_ROUND_MS };
   const { men, women } = splitByGender(profiles);
-  const state = computeState(config);
+  const liveState = computeState(config);
 
-  if(state.round <= 0){
+  const roundInput = document.getElementById('pairingsRoundInput');
+  const chosenRound = roundInput && roundInput.value ? parseInt(roundInput.value, 10) : liveState.round;
+  const round = chosenRound > 0 ? chosenRound : liveState.round;
+
+  if(round <= 0){
     listEl.innerHTML = '<div class="empty">Nessun turno attivo al momento.</div>';
     return;
   }
@@ -856,14 +874,14 @@ async function renderPairingsView(){
     return;
   }
 
-  let html = '<div class="empty" style="text-align:center;margin-bottom:8px;">Turno ' + state.round + '</div>';
+  let html = '<div class="empty" style="text-align:center;margin-bottom:8px;">Turno ' + round + (round === liveState.round ? ' (attuale)' : '') + '</div>';
   html += '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
     '<div style="flex:1;font-size:12px;color:var(--text-muted);">Uomini</div>' +
     '<div style="flex:1;font-size:12px;color:var(--text-muted);text-align:right;">Donne</div>' +
   '</div>';
 
   women.forEach((w, i) => {
-    const partner = partnerFor(w.id, 'F', state.round, men, women);
+    const partner = partnerFor(w.id, 'F', round, men, women);
     html += '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
       '<div style="flex:1;padding:10px 12px;background:var(--card);border:0.5px solid var(--border);border-radius:8px;font-size:14px;">' +
         (partner ? partner.name + ' (n. ' + partner.n + ')' : '—') +
@@ -876,7 +894,7 @@ async function renderPairingsView(){
 
   const pairedIds = new Set();
   women.forEach(w => {
-    const partner = partnerFor(w.id, 'F', state.round, men, women);
+    const partner = partnerFor(w.id, 'F', round, men, women);
     if(partner) pairedIds.add(partner.id);
     pairedIds.add(w.id);
   });
