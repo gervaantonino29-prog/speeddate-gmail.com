@@ -378,6 +378,24 @@ async function setFinalChoice(myId, targetId){
   });
 }
 
+function renderMatchOutcome(container, result, person, onChangeChoice){
+  let html = '';
+  if(result.status === 'match'){
+    html = '<div class="match-row"><i class="ti ti-heart"></i><span>È un match! Con ' + person.name + ' (n. ' + person.num + ')</span></div>';
+  } else if(result.status === 'nomatch'){
+    html = '<div class="empty">Hai scelto ' + person.name + ', ma questa volta non è reciproco: ha scelto qualcun altro. Alla prossima!</div>';
+  } else {
+    html = '<div class="empty">Hai scelto ' + person.name + '. In attesa che decida anche lei/lui — ricontrolla con "Aggiorna adesso".</div>';
+  }
+  if(onChangeChoice){
+    html += '<button id="changeChoiceBtn" style="width:100%;margin-top:10px;font-size:13px;color:var(--text-muted);">Cambia scelta</button>';
+  }
+  container.innerHTML = html;
+  if(onChangeChoice){
+    document.getElementById('changeChoiceBtn').addEventListener('click', onChangeChoice);
+  }
+}
+
 function renderChoiceUI(container, matches, existingChoice){
   let html = '<div class="empty" style="margin-bottom:8px;">Hai più di un match! Scegli quello che preferisci:</div>';
   html += matches.map(m =>
@@ -595,6 +613,21 @@ async function computeMyMatchInfo(){
   return { profiles, countByPerson, finalChoices, myCandidateIds };
 }
 
+function matchStatusFor(targetId, countByPerson, finalChoices, myId){
+  const theirCount = countByPerson[targetId] || 0;
+  if(theirCount <= 1){
+    return { status: 'match' }; // their only match is me, auto-reciprocal
+  }
+  const theirChoice = finalChoices[targetId];
+  if(theirChoice === myId){
+    return { status: 'match' };
+  }
+  if(theirChoice){
+    return { status: 'nomatch' }; // they chose someone else already
+  }
+  return { status: 'waiting' }; // they haven't decided yet
+}
+
 async function tickParticipant(){
   if(cachedFinished){
     if(lastRenderedRound !== 'finished'){
@@ -610,18 +643,20 @@ async function tickParticipant(){
         partnerArea.innerHTML = '<div class="empty">Nessun match questa volta. Alla prossima!</div>';
       } else if(myOwnCount === 1){
         const c = myCandidateIds[0];
-        const theirCount = countByPerson[c] || 0;
-        if(theirCount > 1 && finalChoices[c] !== me){
-          partnerArea.innerHTML = '<div class="empty">Hai un match, ma quella persona ha altri match tra cui scegliere. Aspetta la sua decisione e ricontrolla più tardi con "Aggiorna adesso".</div>';
-        } else {
-          await setFinalChoice(me, c);
-          const p = profiles[c];
-          partnerArea.innerHTML = '<div class="match-row"><i class="ti ti-heart"></i><span>Match con ' + p.name + ' (n. ' + p.num + ')</span></div>';
-        }
+        await setFinalChoice(me, c);
+        const p = profiles[c];
+        const result = matchStatusFor(c, countByPerson, finalChoices, me);
+        renderMatchOutcome(partnerArea, result, p);
       } else {
-        const matches = myCandidateIds.map(id => ({ id, label: profiles[id].name + ' (n. ' + profiles[id].num + ')' }));
         const existingChoice = finalChoices[me] || null;
-        renderChoiceUI(partnerArea, matches, existingChoice);
+        const matches = myCandidateIds.map(id => ({ id, label: profiles[id].name + ' (n. ' + profiles[id].num + ')' }));
+        if(!existingChoice){
+          renderChoiceUI(partnerArea, matches, null);
+        } else {
+          const p = profiles[existingChoice];
+          const result = matchStatusFor(existingChoice, countByPerson, finalChoices, me);
+          renderMatchOutcome(partnerArea, result, p, () => renderChoiceUI(partnerArea, matches, existingChoice));
+        }
       }
     }
     return;
