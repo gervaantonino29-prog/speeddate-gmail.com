@@ -150,8 +150,9 @@
     </div>
 
     <div class="question-card" id="questionCard" style="cursor:pointer;">
-      <div class="question-hint">Domanda rompighiaccio · tocca per cambiarla</div>
+      <div class="question-hint">Domanda rompighiaccio</div>
       <div class="question-text" id="questionText">In attesa del primo turno...</div>
+      <button id="changeQuestionBtn" style="margin-top:12px;">Cambia domanda</button>
     </div>
 
     <div id="partnerArea"></div>
@@ -270,22 +271,46 @@ let cachedProfiles = {};
 let lastRenderedRound = null;
 
 const questions = [
-  "Se dovessi descriverti con un emoji, quale useresti e perché?",
-  "Qual è la cosa più strana che hai nel frigo in questo momento?",
-  "Se potessi avere una skill inutile ma divertente, quale sceglieresti?",
-  "Qual è l'ultima canzone che hai ascoltato in loop senza vergognarti?",
-  "Se la tua vita fosse un film, che genere sarebbe?",
-  "Qual è il tuo comfort food a qualsiasi ora del giorno?",
-  "Preferisci le montagne o il mare, e perché sei disposto/a a litigare per questo?",
-  "Qual è la app che usi di più e di cui ti vergogni un po'?",
-  "Se potessi teletrasportarti ovunque adesso, dove andresti?",
-  "Qual è la cosa più assurda che hai fatto per amore (o per un amico)?",
-  "Gatto o cane? Rispondi in meno di due secondi.",
-  "Qual è il tuo guilty pleasure televisivo?",
-  "Se dovessi cambiare nome domani, quale sceglieresti?",
-  "Qual è il piatto che sai cucinare meglio (o peggio)?",
-  "Se vincessi alla lotteria stasera, la prima cosa folle che compreresti?",
-  "Qual è un talento nascosto che quasi nessuno conosce di te?",
+  "Qual è la cosa più spontanea che hai mai fatto?",
+  "Se potessi essere qualsiasi personaggio di un libro o film per un giorno, chi sceglieresti?",
+  "Qual è la tua canzone preferita per il karaoke?",
+  "Qual è un fatto strano su di te che non molti sanno?",
+  "Hai hobby o talenti insoliti?",
+  "Se vincessi la lotteria domani, la prima cosa che faresti con i soldi?",
+  "Se fossi un animale, che tipo pensi che saresti?",
+  "Hai un \"trucco da festa\" che impressiona sempre le persone?",
+  "Qual è la tua combinazione di cibi strani preferita?",
+  "Quale canzone ti fa sempre andare in pista da ballo?",
+  "Sei più da gatti o da cani?",
+  "Sei mattiniero o nottambulo?",
+  "Qual è una paura sciocca che hai?",
+  "Se potessi scambiare la vita con una celebrità per un giorno, chi sarebbe?",
+  "Se potessi essere qualsiasi animale per un giorno, quale sceglieresti e perché?",
+  "Se potessi inventare un nuovo gusto di gelato, come lo chiameresti?",
+  "Qual è il soprannome più strano che tu abbia mai avuto?",
+  "Qual è la cosa più sciocca che credevi da bambino?",
+  "Qual è il sogno più bizzarro che tu abbia mai fatto?",
+  "Sei mai stato scambiato per qualcuno di famoso?",
+  "Se potessi scegliere un nuovo nome, quale sarebbe?",
+  "Qual è la domanda \"Preferiresti\" più divertente che ti abbiano mai fatto?",
+  "Se fossi una città, quale città saresti e perché?",
+  "Se la tua casa fosse infestata, che tipo di fantasma vorresti che fosse?",
+  "Se potessi avere una fornitura illimitata di un cibo, quale sarebbe?",
+  "Se fossi un mobile, cosa saresti e perché?",
+  "Qual è il nome Wi-Fi più creativo che hai incontrato?",
+  "Immagina di essere un DJ a una festa: qual è la tua canzone per far ballare tutti?",
+  "Se avessi una barca, che nome divertente le daresti?",
+  "Se potessi fondare una band, come la chiameresti e che musica suonereste?",
+  "Qual è il complimento più insolito ma memorabile che tu abbia mai ricevuto?",
+  "Se dovessi diventare famoso, per cosa sarebbe più probabilmente?",
+  "Qual è il malinteso più divertente causato dal correttore automatico?",
+  "Se potessi condurre un talk show, chi sarebbe il tuo primo ospite?",
+  "Qual è la scusa più creativa che hai usato per essere in ritardo?",
+  "Se potessi organizzare una festa a tema, quale sarebbe il tema?",
+  "Qual è il regalo più divertente che hai ricevuto o dato?",
+  "Se fossi un re/regina per un giorno, qual è il tuo primo decreto?",
+  "Qual è la cosa più ridicola che hai fatto per una sfida?",
+  "Se potessi avere un cameo in un film o serie TV, quale sceglieresti?",
 ];
 
 // updateData: read-modify-write with automatic retry on conflict (409)
@@ -403,7 +428,7 @@ function questionForRound(round){
 let questionOverride = null;
 let questionOverrideRound = null;
 
-document.getElementById('questionCard').addEventListener('click', ()=>{
+function changeQuestion(){
   const round = computeState(cachedConfig).round;
   const current = document.getElementById('questionText').textContent;
   let idx;
@@ -411,6 +436,12 @@ document.getElementById('questionCard').addEventListener('click', ()=>{
   questionOverride = questions[idx];
   questionOverrideRound = round;
   document.getElementById('questionText').textContent = questionOverride;
+}
+
+document.getElementById('questionCard').addEventListener('click', changeQuestion);
+document.getElementById('changeQuestionBtn').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  changeQuestion();
 });
 
 function populateSelects(){
