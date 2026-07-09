@@ -1,1 +1,1 @@
-{"config":{"round":1,"roundStartedAt":1783600854669,"paused":false,"duration":10000},"profiles":{"F1":{"name":"giulia","gender":"F","num":1},"M1":{"name":"marco","gender":"M","num":1},"M2":{"name":"Marco","gender":"M","num":2},"F2":{"name":"Marzia","gender":"F","num":2},"M3":{"name":"coglione","gender":"M","num":3}},"votes":{},"eventName":"speedate1","finished":true}
+{"config":{"round":0,"roundStartedAt":null,"paused":false,"duration":10000},"profiles":{},"votes":{},"eventName":"speedate1","finished":false}
