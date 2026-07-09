@@ -126,13 +126,13 @@
   <div id="setup">
     <label for="myName">Il tuo nome</label>
     <input id="myName" type="text" placeholder="es. Giulia" />
-    <label for="myNumber">Il tuo numero</label>
-    <select id="myNumber"></select>
     <label>Genere</label>
     <div class="gender-row">
       <button type="button" id="genM" class="gender-btn">Uomo</button>
       <button type="button" id="genF" class="gender-btn">Donna</button>
     </div>
+    <label for="myNumber">Il tuo numero</label>
+    <select id="myNumber"><option>Seleziona prima il genere</option></select>
     <button class="primary" id="startBtn">Entra</button>
     <button id="orgBtn" style="width:100%;margin-top:10px;font-size:13px;color:var(--text-muted);">Sono l'organizzatore</button>
   </div>
@@ -496,7 +496,7 @@ function populateSelects(){
     myNumber.appendChild(o);
   }
 }
-populateSelects();
+// number select stays on placeholder until a gender is chosen (see refreshAvailableNumbers)
 
 async function refreshAvailableNumbers(){
   if(!myGender) return;
