@@ -192,6 +192,7 @@
       </div>
       <button id="stopEventBtn" class="hidden" style="width:100%;margin-top:8px;color:var(--danger-text);">Metti in pausa</button>
       <button id="resumeEventBtn" class="hidden" style="width:100%;margin-top:8px;color:var(--success-text);">Riprendi</button>
+      <button id="endEventBtn" class="hidden" style="width:100%;margin-top:8px;color:var(--success-text);">Termina la serata (mostra i match a tutti)</button>
     </div>
 
     <button id="showAllMatchesBtn" style="width:100%;margin-bottom:16px;">Vedi tutti i match della serata</button>
@@ -477,16 +478,47 @@ document.getElementById('genF').addEventListener('click', ()=>{
 
 // ---- Participant: sync (network) every 8s, tick (local redraw) every 1s ----
 
+let cachedFinished = false;
+
 async function syncParticipant(){
   const data = await readData();
   cachedConfig = data.config || { round: 0, roundStartedAt: null, duration: DEFAULT_ROUND_MS };
   cachedProfiles = data.profiles || {};
+  cachedFinished = !!data.finished;
   if(data.eventName){
     document.getElementById('eventNameLabel').textContent = data.eventName;
   }
 }
 
 async function tickParticipant(){
+  if(cachedFinished){
+    if(lastRenderedRound !== 'finished'){
+      lastRenderedRound = 'finished';
+      document.getElementById('questionText').textContent = 'La serata è finita — ecco i tuoi match!';
+      const partnerArea = document.getElementById('partnerArea');
+      partnerArea.innerHTML = '<div class="empty">Calcolo dei match...</div>';
+      const allVotes = await getAllVotes();
+      const myVotes = allVotes[me] || {};
+      const liked = Object.keys(myVotes).filter(k => myVotes[k]);
+      const matches = [];
+      for(const targetId of liked){
+        const theirVotes = allVotes[targetId] || {};
+        if(theirVotes[me]){
+          const p = cachedProfiles[targetId];
+          if(p) matches.push(p.name + ' (n. ' + p.num + ')');
+        }
+      }
+      if(matches.length === 0){
+        partnerArea.innerHTML = '<div class="empty">Nessun match questa volta. Alla prossima!</div>';
+      } else {
+        partnerArea.innerHTML = matches.map(label =>
+          '<div class="match-row"><i class="ti ti-heart"></i><span>Match con ' + label + '</span></div>'
+        ).join('');
+      }
+    }
+    return;
+  }
+
   const state = computeState(cachedConfig);
   const round = state.round;
   if(round !== questionOverrideRound){
@@ -619,6 +651,7 @@ function renderOrgTick(){
   const adjustButtons = document.getElementById('orgAdjustButtons');
   const stopBtn = document.getElementById('stopEventBtn');
   const resumeBtn = document.getElementById('resumeEventBtn');
+  const endBtn = document.getElementById('endEventBtn');
   const paused = !!cachedConfig.paused;
 
   if(state.round <= 0){
@@ -629,6 +662,7 @@ function renderOrgTick(){
     adjustButtons.classList.add('hidden');
     stopBtn.classList.add('hidden');
     resumeBtn.classList.add('hidden');
+    endBtn.classList.add('hidden');
   } else if(paused){
     statusLabel.textContent = 'In pausa (turno ' + state.round + ')';
     orgTimer.classList.add('hidden');
@@ -638,6 +672,7 @@ function renderOrgTick(){
     adjustButtons.classList.remove('hidden');
     stopBtn.classList.add('hidden');
     resumeBtn.classList.remove('hidden');
+    endBtn.classList.remove('hidden');
   } else {
     statusLabel.textContent = 'In corso';
     orgTimer.classList.remove('hidden');
@@ -646,6 +681,7 @@ function renderOrgTick(){
     adjustButtons.classList.remove('hidden');
     stopBtn.classList.remove('hidden');
     resumeBtn.classList.add('hidden');
+    endBtn.classList.remove('hidden');
     orgTimer.textContent = formatTime(state.remainingMs);
     orgTimer.classList.toggle('warning', state.remainingMs < 30000);
     orgRoundNumber.textContent = 'Turno ' + state.round;
@@ -674,6 +710,7 @@ document.getElementById('startEventBtn').addEventListener('click', async ()=>{
   cachedConfig.roundStartedAt = Date.now();
   cachedConfig.paused = false;
   await setConfig(cachedConfig);
+  await updateData(data => { data.finished = false; });
   const check = await getConfig();
   document.getElementById('orgDebug').textContent = 'Scritto: round=' + cachedConfig.round + ' | Riletto: round=' + (check.round || 0) + ' | Errore: ' + (lastWriteError || 'nessuno');
   renderOrgTick();
@@ -696,6 +733,13 @@ document.getElementById('resumeEventBtn').addEventListener('click', async ()=>{
   renderOrgTick();
   renderParticipantsView();
   renderPairingsView();
+});
+
+document.getElementById('endEventBtn').addEventListener('click', async ()=>{
+  const sure = confirm('Terminare la serata? Tutti i partecipanti vedranno subito i loro match.');
+  if(!sure) return;
+  await updateData(data => { data.finished = true; });
+  alert('Serata terminata. I partecipanti vedranno i match al prossimo aggiornamento della loro pagina.');
 });
 
 document.getElementById('nextRoundBtn').addEventListener('click', async ()=>{
@@ -866,6 +910,7 @@ document.getElementById('resetParticipantsBtn').addEventListener('click', async 
   await updateData(data => {
     data.profiles = {};
     data.votes = {};
+    data.finished = false;
     data.config = { round: 0, roundStartedAt: null, paused: false, duration: data.config ? data.config.duration : DEFAULT_ROUND_MS };
   });
   cachedConfig = await getConfig();
