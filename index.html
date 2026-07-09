@@ -371,6 +371,34 @@ async function setMyVote(myNum, targetNum, value){
   });
 }
 
+async function setFinalChoice(myId, targetId){
+  await updateData(data => {
+    if(!data.finalChoices) data.finalChoices = {};
+    data.finalChoices[myId] = targetId;
+  });
+}
+
+function renderChoiceUI(container, matches, existingChoice){
+  let html = '<div class="empty" style="margin-bottom:8px;">Hai più di un match! Scegli quello che preferisci:</div>';
+  html += matches.map(m =>
+    '<button class="choiceBtn" data-id="' + m.id + '" style="width:100%;margin-bottom:8px;text-align:left;' +
+      (existingChoice === m.id ? 'border-color:var(--success-border);border-width:2px;' : '') +
+    '">' + m.label + (existingChoice === m.id ? ' ✓' : '') + '</button>'
+  ).join('');
+  if(existingChoice){
+    html += '<div class="empty" style="margin-top:8px;">Scelta confermata. Puoi cambiarla toccando un altro nome.</div>';
+  }
+  container.innerHTML = html;
+  container.querySelectorAll('.choiceBtn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.getAttribute('data-id');
+      await setFinalChoice(me, id);
+      lastRenderedRound = null;
+      tickParticipant();
+    });
+  });
+}
+
 // ---- Round math ----
 
 function computeState(config){
@@ -504,6 +532,38 @@ async function syncParticipant(){
   }
 }
 
+async function computeMyMatchInfo(){
+  const data = await readData();
+  const profiles = data.profiles || {};
+  const allVotes = data.votes || {};
+  const finalChoices = data.finalChoices || {};
+
+  const pairs = [];
+  const seen = new Set();
+  for(const a of Object.keys(allVotes)){
+    const votesA = allVotes[a] || {};
+    for(const b of Object.keys(votesA)){
+      if(!votesA[b]) continue;
+      if(!profiles[b]) continue;
+      const votesB = allVotes[b] || {};
+      if(!votesB[a]) continue;
+      const key = [a,b].sort().join('-');
+      if(seen.has(key)) continue;
+      seen.add(key);
+      pairs.push({ a, b });
+    }
+  }
+  const countByPerson = {};
+  pairs.forEach(pr => {
+    countByPerson[pr.a] = (countByPerson[pr.a] || 0) + 1;
+    countByPerson[pr.b] = (countByPerson[pr.b] || 0) + 1;
+  });
+
+  const myCandidateIds = pairs.filter(pr => pr.a === me || pr.b === me).map(pr => pr.a === me ? pr.b : pr.a);
+
+  return { profiles, countByPerson, finalChoices, myCandidateIds };
+}
+
 async function tickParticipant(){
   if(cachedFinished){
     if(lastRenderedRound !== 'finished'){
@@ -511,23 +571,26 @@ async function tickParticipant(){
       document.getElementById('questionText').textContent = 'La serata è finita — ecco i tuoi match!';
       const partnerArea = document.getElementById('partnerArea');
       partnerArea.innerHTML = '<div class="empty">Calcolo dei match...</div>';
-      const allVotes = await getAllVotes();
-      const myVotes = allVotes[me] || {};
-      const liked = Object.keys(myVotes).filter(k => myVotes[k]);
-      const matches = [];
-      for(const targetId of liked){
-        const theirVotes = allVotes[targetId] || {};
-        if(theirVotes[me]){
-          const p = cachedProfiles[targetId];
-          if(p) matches.push(p.name + ' (n. ' + p.num + ')');
-        }
-      }
-      if(matches.length === 0){
+
+      const { profiles, countByPerson, finalChoices, myCandidateIds } = await computeMyMatchInfo();
+      const myOwnCount = myCandidateIds.length;
+
+      if(myOwnCount === 0){
         partnerArea.innerHTML = '<div class="empty">Nessun match questa volta. Alla prossima!</div>';
+      } else if(myOwnCount === 1){
+        const c = myCandidateIds[0];
+        const theirCount = countByPerson[c] || 0;
+        if(theirCount > 1 && finalChoices[c] !== me){
+          partnerArea.innerHTML = '<div class="empty">Hai un match, ma quella persona ha altri match tra cui scegliere. Aspetta la sua decisione e ricontrolla più tardi con "Aggiorna adesso".</div>';
+        } else {
+          await setFinalChoice(me, c);
+          const p = profiles[c];
+          partnerArea.innerHTML = '<div class="match-row"><i class="ti ti-heart"></i><span>Match con ' + p.name + ' (n. ' + p.num + ')</span></div>';
+        }
       } else {
-        partnerArea.innerHTML = matches.map(label =>
-          '<div class="match-row"><i class="ti ti-heart"></i><span>Match con ' + label + '</span></div>'
-        ).join('');
+        const matches = myCandidateIds.map(id => ({ id, label: profiles[id].name + ' (n. ' + profiles[id].num + ')' }));
+        const existingChoice = finalChoices[me] || null;
+        renderChoiceUI(partnerArea, matches, existingChoice);
       }
     }
     return;
@@ -814,6 +877,27 @@ document.getElementById('showAllMatchesBtn').addEventListener('click', async ()=
       return '<div class="match-row"><i class="ti ti-heart"></i><span>' + nameA + ' + ' + nameB + '</span></div>';
     }).join('');
   }
+
+  const matchesByPerson = {};
+  pairs.forEach(pr => {
+    if(!matchesByPerson[pr.a]) matchesByPerson[pr.a] = [];
+    if(!matchesByPerson[pr.b]) matchesByPerson[pr.b] = [];
+    matchesByPerson[pr.a].push(pr.b);
+    matchesByPerson[pr.b].push(pr.a);
+  });
+  const finalChoices = data.finalChoices || {};
+  const multiMatchIds = Object.keys(matchesByPerson).filter(id => matchesByPerson[id].length > 1);
+
+  if(multiMatchIds.length > 0){
+    let choiceHtml = '<div class="empty" style="text-align:center;margin-top:16px;margin-bottom:8px;">Scelte finali (chi ha più match)</div>';
+    choiceHtml += multiMatchIds.map(id => {
+      const person = profiles[id].name + ' (n. ' + profiles[id].num + ')';
+      const chosenId = finalChoices[id];
+      const chosenLabel = chosenId && profiles[chosenId] ? (profiles[chosenId].name + ' (n. ' + profiles[chosenId].num + ')') : 'in attesa di scelta';
+      return '<div class="row"><span>' + person + ' → ' + chosenLabel + '</span></div>';
+    }).join('');
+    orgMatchList.innerHTML += choiceHtml;
+  }
 });
 
 async function renderParticipantsView(){
@@ -917,6 +1001,7 @@ document.getElementById('resetVotesBtn').addEventListener('click', async ()=>{
   if(!sure) return;
   await updateData(data => {
     data.votes = {};
+    data.finalChoices = {};
   });
   document.getElementById('orgMatchList').innerHTML = '';
   alert('Voti e match azzerati.');
@@ -928,6 +1013,7 @@ document.getElementById('resetParticipantsBtn').addEventListener('click', async 
   await updateData(data => {
     data.profiles = {};
     data.votes = {};
+    data.finalChoices = {};
     data.finished = false;
     data.config = { round: 0, roundStartedAt: null, paused: false, duration: data.config ? data.config.duration : DEFAULT_ROUND_MS };
   });
