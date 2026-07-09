@@ -157,6 +157,7 @@
 
     <div id="partnerArea"></div>
     <button id="manualRefreshBtn" style="width:100%;margin-top:10px;font-size:13px;color:var(--text-muted);">Aggiorna adesso</button>
+    <button id="switchPersonBtn" style="width:100%;margin-top:8px;font-size:13px;color:var(--text-muted);">Non sei tu? Cambia persona</button>
   </div>
 
   <div id="orgView" class="hidden">
@@ -520,27 +521,19 @@ async function refreshAvailableNumbers(){
   if(!myGender) return;
   const myNumber = document.getElementById('myNumber');
   myNumber.innerHTML = '<option>Caricamento...</option>';
-  let taken = new Set();
+  let taken = new Map();
   try{
     const data = await readData();
     const profiles = data.profiles || {};
-    taken = new Set(
-      Object.values(profiles)
-        .filter(p => p.gender === myGender)
-        .map(p => p.num)
-    );
+    Object.values(profiles)
+      .filter(p => p.gender === myGender)
+      .forEach(p => taken.set(p.num, p.name));
   }catch(e){}
   myNumber.innerHTML = '';
   for(let i=1;i<=MAX_SLOTS;i++){
-    if(taken.has(i)) continue;
     const o = document.createElement('option');
-    o.value = i; o.textContent = 'Numero ' + i;
-    myNumber.appendChild(o);
-  }
-  if(myNumber.options.length === 0){
-    const o = document.createElement('option');
-    o.textContent = 'Nessun numero disponibile';
-    o.disabled = true;
+    o.value = i;
+    o.textContent = taken.has(i) ? ('Numero ' + i + ' — già preso da ' + taken.get(i)) : ('Numero ' + i);
     myNumber.appendChild(o);
   }
 }
@@ -550,6 +543,16 @@ async function refreshAvailableNumbers(){
     const data = await readData();
     if(data.eventName){
       document.getElementById('eventNameLabel').textContent = data.eventName;
+    }
+  }catch(e){}
+
+  try{
+    const saved = localStorage.getItem('speeddate_session');
+    if(saved){
+      const session = JSON.parse(saved);
+      if(session && session.id && session.gender && session.name){
+        await enterVotingScreen(session.id, session.gender, session.name);
+      }
     }
   }catch(e){}
 })();
@@ -721,20 +724,11 @@ async function tickParticipant(){
   }
 }
 
-document.getElementById('startBtn').addEventListener('click', async ()=>{
-  if(!myGender){
-    alert('Seleziona il genere prima di entrare');
-    return;
-  }
-  const numVal = parseInt(document.getElementById('myNumber').value, 10);
-  if(!numVal){
-    alert('Nessun numero disponibile per questo genere, o non ne hai ancora scelto uno.');
-    return;
-  }
-  me = myGender + numVal;
-  myNameVal = document.getElementById('myName').value.trim() || ('Numero ' + numVal);
-  await saveMyProfile(me, numVal, myNameVal, myGender);
-  document.getElementById('meLabel').textContent = myNameVal + ' (n. ' + numVal + ')';
+async function enterVotingScreen(id, gender, name){
+  me = id;
+  myGender = gender;
+  myNameVal = name;
+  document.getElementById('meLabel').textContent = myNameVal + ' (n. ' + (id.match(/\d+/)[0]) + ')';
   document.getElementById('setup').classList.add('hidden');
   document.getElementById('voting').classList.remove('hidden');
 
@@ -746,12 +740,54 @@ document.getElementById('startBtn').addEventListener('click', async ()=>{
   tickTimer = setInterval(tickParticipant, 1000);
   if(syncTimer) clearInterval(syncTimer);
   syncTimer = setInterval(syncParticipant, 8000);
+}
+
+document.getElementById('startBtn').addEventListener('click', async ()=>{
+  if(!myGender){
+    alert('Seleziona il genere prima di entrare');
+    return;
+  }
+  const numVal = parseInt(document.getElementById('myNumber').value, 10);
+  if(!numVal){
+    alert('Nessun numero disponibile per questo genere, o non ne hai ancora scelto uno.');
+    return;
+  }
+  const id = myGender + numVal;
+  const name = document.getElementById('myName').value.trim() || ('Numero ' + numVal);
+
+  const existingData = await readData();
+  const existingProfile = (existingData.profiles || {})[id];
+  if(existingProfile && existingProfile.name.trim().toLowerCase() !== name.trim().toLowerCase()){
+    const proceed = confirm('Il numero ' + numVal + ' è già registrato come "' + existingProfile.name + '". Vuoi sovrascriverlo con "' + name + '"?');
+    if(!proceed) return;
+  }
+
+  await saveMyProfile(id, numVal, name, myGender);
+  try{
+    localStorage.setItem('speeddate_session', JSON.stringify({ id, gender: myGender, name }));
+  }catch(e){}
+  await enterVotingScreen(id, myGender, name);
 });
 
 document.getElementById('manualRefreshBtn').addEventListener('click', async ()=>{
   await syncParticipant();
   lastRenderedRound = null;
   await tickParticipant();
+});
+
+document.getElementById('switchPersonBtn').addEventListener('click', ()=>{
+  try{ localStorage.removeItem('speeddate_session'); }catch(e){}
+  if(tickTimer) clearInterval(tickTimer);
+  if(syncTimer) clearInterval(syncTimer);
+  me = null;
+  myGender = null;
+  myNameVal = '';
+  document.getElementById('genM').classList.remove('active');
+  document.getElementById('genF').classList.remove('active');
+  document.getElementById('myName').value = '';
+  document.getElementById('myNumber').innerHTML = '<option>Seleziona prima il genere</option>';
+  document.getElementById('voting').classList.add('hidden');
+  document.getElementById('setup').classList.remove('hidden');
 });
 
 // ---- Organizer ----
