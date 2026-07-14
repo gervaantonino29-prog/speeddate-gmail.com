@@ -639,28 +639,18 @@ async function tickParticipant(){
       const partnerArea = document.getElementById('partnerArea');
       partnerArea.innerHTML = '<div class="empty">Calcolo dei match...</div>';
 
-      const { profiles, countByPerson, finalChoices, myCandidateIds } = await computeMyMatchInfo();
-      const myOwnCount = myCandidateIds.length;
+      const { profiles, myCandidateIds } = await computeMyMatchInfo();
 
-      if(myOwnCount === 0){
-        partnerArea.innerHTML = '<div class="empty">Nessun match questa volta. Alla prossima!</div>';
-      } else if(myOwnCount === 1){
-        const c = myCandidateIds[0];
-        await setFinalChoice(me, c);
-        const p = profiles[c];
-        const result = matchStatusFor(c, countByPerson, finalChoices, me);
-        renderMatchOutcome(partnerArea, result, p);
+      let html = '';
+      if(myCandidateIds.length === 0){
+        html = '<div class="empty">Nessun match questa volta. Alla prossima!</div>';
       } else {
-        const existingChoice = finalChoices[me] || null;
-        const matches = myCandidateIds.map(id => ({ id, label: profiles[id].name + ' (n. ' + profiles[id].num + ')' }));
-        if(!existingChoice){
-          renderChoiceUI(partnerArea, matches, null);
-        } else {
-          const p = profiles[existingChoice];
-          const result = matchStatusFor(existingChoice, countByPerson, finalChoices, me);
-          renderMatchOutcome(partnerArea, result, p, () => renderChoiceUI(partnerArea, matches, existingChoice));
-        }
+        html = myCandidateIds.map(id => {
+          const p = profiles[id];
+          return '<div class="match-row"><i class="ti ti-heart"></i><span>Match con ' + p.name + ' (n. ' + p.num + ')</span></div>';
+        }).join('');
       }
+      partnerArea.innerHTML = html;
     }
     return;
   }
