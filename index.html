@@ -665,63 +665,65 @@ async function tickParticipant(){
     return;
   }
 
-  const state = computeState(cachedConfig);
-  const round = state.round;
-  if(round !== questionOverrideRound){
-    questionOverride = null;
-    questionOverrideRound = round;
-  }
-  document.getElementById('questionText').textContent = questionOverride || questionForRound(round);
+  document.getElementById('questionText').textContent = questionOverride || 'Vota tutte le persone che ti interessano, poi premi Invia';
   const partnerArea = document.getElementById('partnerArea');
 
-  if(round <= 0){
-    if(lastRenderedRound !== 0){
-      partnerArea.innerHTML = '<div class="empty">L\'organizzatore non ha ancora aperto il primo turno.</div>';
-      lastRenderedRound = 0;
-    }
-    return;
-  }
+  if(lastRenderedRound !== 'fulllist'){
+    lastRenderedRound = 'fulllist';
+    const { men, women } = splitByGender(cachedProfiles);
+    const candidates = myGender === 'M' ? women : men;
 
-  const { men, women } = splitByGender(cachedProfiles);
-  const partner = partnerFor(me, myGender, round, men, women);
-
-  if(round !== lastRenderedRound){
-    if(!partner){
-      partnerArea.innerHTML = '<div class="empty">Sei in pausa questo turno (numeri sbilanciati tra uomini e donne). Ripartirai al prossimo giro.</div>';
-      lastRenderedRound = round;
+    if(candidates.length === 0){
+      partnerArea.innerHTML = '<div class="empty">Nessuno del genere opposto si è ancora registrato.</div>';
       return;
     }
+
     const allVotes = await getAllVotes();
-    const myVotes = (allVotes[me]) || {};
-    const currentVote = myVotes[partner.id];
-    partnerArea.innerHTML =
-      '<div class="partner-card" id="partner-card-inner">' +
-        '<div class="partner-round">Turno ' + round + '</div>' +
-        '<div class="partner-name">' + partner.name + ' (n. ' + partner.n + ')</div>' +
-        '<div class="timer" id="partnerTimer">' + formatTime(state.remainingMs) + '</div>' +
-        '<div class="vote-row">' +
-          '<button id="voteYes" class="vote-btn yes' + (currentVote === true ? ' active' : '') + '"><i class="ti ti-heart"></i> Sì</button>' +
-          '<button id="voteNo" class="vote-btn no' + (currentVote === false ? ' active' : '') + '"><i class="ti ti-x"></i> No</button>' +
-        '</div>' +
-      '</div>';
-    document.getElementById('voteYes').addEventListener('click', async ()=>{
-      await setMyVote(me, partner.id, true);
-      lastRenderedRound = null;
-      tickParticipant();
-    });
-    document.getElementById('voteNo').addEventListener('click', async ()=>{
-      await setMyVote(me, partner.id, false);
-      lastRenderedRound = null;
-      tickParticipant();
-    });
-    lastRenderedRound = round;
-  } else {
-    const timerEl = document.getElementById('partnerTimer');
-    if(timerEl){
-      timerEl.textContent = formatTime(state.remainingMs);
-      timerEl.classList.toggle('warning', state.remainingMs < 30000);
-    }
+    voteDraft = Object.assign({}, allVotes[me] || {});
+
+    renderVoteList(partnerArea, candidates);
   }
+}
+
+let voteDraft = {};
+
+function renderVoteList(container, candidates){
+  let html = '<div class="list">';
+  candidates.forEach(c => {
+    const currentVote = voteDraft[c.id];
+    html += '<div class="row">' +
+      '<span>' + c.name + ' (n. ' + c.n + ')</span>' +
+      '<div style="display:flex;gap:6px;">' +
+        '<button class="voteBtn" data-id="' + c.id + '" data-val="true" style="padding:8px 12px;' + (currentVote === true ? 'border-color:var(--success-border);border-width:2px;' : '') + '"><i class="ti ti-heart"></i></button>' +
+        '<button class="voteBtn" data-id="' + c.id + '" data-val="false" style="padding:8px 12px;' + (currentVote === false ? 'border-color:var(--danger-border);border-width:2px;' : '') + '"><i class="ti ti-x"></i></button>' +
+      '</div>' +
+    '</div>';
+  });
+  html += '</div>';
+  html += '<button id="submitVotesBtn" class="primary" style="margin-top:14px;">Invia</button>';
+  html += '<p id="submitStatus" class="empty" style="margin-top:8px;"></p>';
+  container.innerHTML = html;
+
+  container.querySelectorAll('.voteBtn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const targetId = btn.getAttribute('data-id');
+      const val = btn.getAttribute('data-val') === 'true';
+      voteDraft[targetId] = val;
+      renderVoteList(container, candidates);
+    });
+  });
+
+  document.getElementById('submitVotesBtn').addEventListener('click', async ()=>{
+    const btn = document.getElementById('submitVotesBtn');
+    btn.disabled = true;
+    btn.textContent = 'Invio in corso...';
+    for(const targetId of Object.keys(voteDraft)){
+      await setMyVote(me, targetId, voteDraft[targetId]);
+    }
+    document.getElementById('submitStatus').textContent = 'Voti inviati! Puoi ancora cambiarli e reinviare finché la serata non finisce.';
+    btn.disabled = false;
+    btn.textContent = 'Invia';
+  });
 }
 
 async function enterVotingScreen(id, gender, name){
